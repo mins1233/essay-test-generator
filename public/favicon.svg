@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="논술형 평가 문항 제작">
+  <rect width="64" height="64" rx="16" fill="#565264"/>
+  <path d="M18 10h23l9 9v35H18z" fill="#f6f1ee"/>
+  <path d="M41 10v10h9z" fill="#ccb7ae"/>
+  <rect x="23" y="25" width="20" height="4" rx="2" fill="#a6808c"/>
+  <rect x="23" y="33" width="15" height="4" rx="2" fill="#706677"/>
+  <path d="M22 46l7 5 13-17" fill="none" stroke="#8f4f61" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M45 31l7 7-17 17-8 2 2-8z" fill="#b86f7e"/>
+  <path d="M45 31l7 7-3 3-7-7z" fill="#d6cfcb"/>
+  <path d="M27 57l2-8 6 6z" fill="#312d35"/>
+</svg>
