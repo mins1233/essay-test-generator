@@ -414,6 +414,18 @@ select:focus {
   accent-color: var(--olive);
 }
 
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--olive-dark);
+}
+
 .model-selector {
   display: grid;
   gap: 10px;
@@ -654,6 +666,41 @@ select:focus {
 .select-card small {
   display: block;
   margin-top: 4px;
+}
+
+.custom-elements {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.custom-element-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--cream);
+  padding: 12px;
+}
+
+.custom-element-card:focus-within {
+  border-color: var(--olive);
+  box-shadow: 0 0 0 3px rgb(166 128 140 / 20%);
+}
+
+.custom-element-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.custom-element-head strong {
+  color: var(--ink-strong);
+}
+
+.add-element-button {
+  width: 100%;
 }
 
 .request-side {

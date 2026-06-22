@@ -10,6 +10,7 @@ import {
   KeyRound,
   Loader2,
   PenLine,
+  PlusCircle,
   RefreshCw,
   Sparkles,
   Trash2,
@@ -47,6 +48,7 @@ export default function App() {
   const [teacherInput, setTeacherInput] = useState(initialTeacherInput);
   const [suggestion, setSuggestion] = useState(null);
   const [selectedElementIndexes, setSelectedElementIndexes] = useState([]);
+  const [customAssessmentElements, setCustomAssessmentElements] = useState([]);
   const [additionalRequest, setAdditionalRequest] = useState("");
   const [rubricLevelCount, setRubricLevelCount] = useState(4);
   const [assessment, setAssessment] = useState(null);
@@ -58,10 +60,18 @@ export default function App() {
 
   const selectedElements = useMemo(() => {
     if (!suggestion) return [];
-    return selectedElementIndexes
+    const suggestedElements = selectedElementIndexes
       .map((index) => suggestion.assessmentElements[index])
       .filter(Boolean);
-  }, [selectedElementIndexes, suggestion]);
+    const customElements = customAssessmentElements
+      .map((element) => ({
+        title: element.title.trim(),
+        focus: element.focus.trim(),
+        source: "custom",
+      }))
+      .filter((element) => element.title && element.focus);
+    return [...suggestedElements, ...customElements];
+  }, [customAssessmentElements, selectedElementIndexes, suggestion]);
 
   const markdown = useMemo(
     () => buildMarkdown({ teacherInput, suggestion, selectedElements, assessment, rubric }),
@@ -154,6 +164,7 @@ export default function App() {
       assertRange(result.assessmentElements, 3, 4, "평가 요소");
       setSuggestion(result);
       setSelectedElementIndexes([]);
+      setCustomAssessmentElements([]);
       setAssessment(null);
       setRubric(null);
       setNotice("평가 항목과 평가 요소를 생성했습니다.");
@@ -171,7 +182,14 @@ export default function App() {
   }
 
   async function handleGenerateAssessment() {
-    const validation = validateAssessmentRequest({ apiKey, model, teacherInput, suggestion, selectedElements });
+    const validation = validateAssessmentRequest({
+      apiKey,
+      model,
+      teacherInput,
+      suggestion,
+      selectedElements,
+      customAssessmentElements,
+    });
     if (validation.length > 0) {
       setErrors(validation);
       return;
@@ -271,6 +289,45 @@ export default function App() {
         ? current.filter((item) => item !== index)
         : [...current, index].sort((a, b) => a - b),
     );
+    clearGeneratedOutputs();
+  }
+
+  function addCustomAssessmentElement() {
+    setCustomAssessmentElements((current) => [
+      ...current,
+      { id: createElementId(), title: "", focus: "" },
+    ]);
+    clearGeneratedOutputs();
+  }
+
+  function updateCustomAssessmentElement(id, field, value) {
+    setCustomAssessmentElements((current) =>
+      current.map((element) =>
+        element.id === id ? { ...element, [field]: value } : element,
+      ),
+    );
+    clearGeneratedOutputs();
+  }
+
+  function removeCustomAssessmentElement(id) {
+    setCustomAssessmentElements((current) => current.filter((element) => element.id !== id));
+    clearGeneratedOutputs();
+  }
+
+  function updateAdditionalRequest(value) {
+    setAdditionalRequest(value);
+    setAssessment(null);
+    setRubric(null);
+  }
+
+  function updateRubricLevelCount(value) {
+    setRubricLevelCount(value);
+    setRubric(null);
+  }
+
+  function clearGeneratedOutputs() {
+    setAssessment(null);
+    setRubric(null);
   }
 
   return (
@@ -445,6 +502,52 @@ export default function App() {
                       </span>
                     </label>
                   ))}
+                  <div className="custom-elements">
+                    {customAssessmentElements.map((element, index) => (
+                      <div className="custom-element-card" key={element.id}>
+                        <div className="custom-element-head">
+                          <strong>직접 입력 평가 요소 {index + 1}</strong>
+                          <button
+                            className="icon-button"
+                            type="button"
+                            onClick={() => removeCustomAssessmentElement(element.id)}
+                            aria-label="직접 입력 평가 요소 삭제"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                        <label className="field compact">
+                          <span>평가 요소명</span>
+                          <input
+                            value={element.title}
+                            onChange={(event) =>
+                              updateCustomAssessmentElement(element.id, "title", event.target.value)
+                            }
+                            placeholder="예: 생태계 상호작용을 근거로 설명하기"
+                          />
+                        </label>
+                        <label className="field compact">
+                          <span>평가 초점</span>
+                          <textarea
+                            value={element.focus}
+                            onChange={(event) =>
+                              updateCustomAssessmentElement(element.id, "focus", event.target.value)
+                            }
+                            rows={3}
+                            placeholder="예: 제시문 속 실제 사례를 활용해 생물 간 관계와 물질 순환을 논리적으로 연결한다."
+                          />
+                        </label>
+                      </div>
+                    ))}
+                    <button
+                      className="button secondary add-element-button"
+                      type="button"
+                      onClick={addCustomAssessmentElement}
+                    >
+                      <PlusCircle size={17} />
+                      평가 요소 추가
+                    </button>
+                  </div>
                 </ResultGroup>
               </div>
 
@@ -453,7 +556,7 @@ export default function App() {
                   <span>추가 요청사항</span>
                   <textarea
                     value={additionalRequest}
-                    onChange={(event) => setAdditionalRequest(event.target.value)}
+                    onChange={(event) => updateAdditionalRequest(event.target.value)}
                     rows={4}
                     placeholder="예: 학교 주변의 실제 생태 맥락을 제시문에 반영해 주세요."
                   />
@@ -463,7 +566,7 @@ export default function App() {
                     <span>채점 단계 수</span>
                     <select
                       value={rubricLevelCount}
-                      onChange={(event) => setRubricLevelCount(Number(event.target.value))}
+                      onChange={(event) => updateRubricLevelCount(Number(event.target.value))}
                     >
                       <option value={3}>3단계</option>
                       <option value={4}>4단계</option>
@@ -778,10 +881,24 @@ function validateTeacherInput({ apiKey, model, teacherInput }) {
   return messages;
 }
 
-function validateAssessmentRequest({ apiKey, model, teacherInput, suggestion, selectedElements }) {
+function validateAssessmentRequest({
+  apiKey,
+  model,
+  teacherInput,
+  suggestion,
+  selectedElements,
+  customAssessmentElements,
+}) {
   const messages = validateTeacherInput({ apiKey, model, teacherInput });
   if (!suggestion) messages.push("먼저 평가 항목과 평가 요소를 생성해 주세요.");
   if (selectedElements.length === 0) messages.push("문항으로 만들 평가 요소를 1개 이상 선택해 주세요.");
+  customAssessmentElements.forEach((element, index) => {
+    const hasTitle = Boolean(element.title.trim());
+    const hasFocus = Boolean(element.focus.trim());
+    if (hasTitle !== hasFocus) {
+      messages.push(`직접 입력 평가 요소 ${index + 1}의 평가 요소명과 평가 초점을 모두 입력해 주세요.`);
+    }
+  });
   return messages;
 }
 
@@ -807,4 +924,11 @@ function readSavedApiKey() {
   } catch {
     return "";
   }
+}
+
+function createElementId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
