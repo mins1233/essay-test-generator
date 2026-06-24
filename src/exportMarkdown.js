@@ -1,4 +1,4 @@
-export function buildMarkdown({ teacherInput, suggestion, selectedElements, assessment, rubric }) {
+export function buildMarkdown({ teacherInput, suggestion, selectedElements, selectedProblemType, additionalRequest, assessment, rubric }) {
   const lines = [
     "# 논술형 평가 문항",
     "",
@@ -17,6 +17,17 @@ export function buildMarkdown({ teacherInput, suggestion, selectedElements, asse
       "",
       "## 선택 평가 요소",
       ...selectedElements.map((element) => `- ${element.title}: ${element.focus}`),
+    );
+  }
+
+  if (selectedProblemType) {
+    lines.push(
+      "",
+      "## 문제 유형",
+      `- ${selectedProblemType.label}: ${selectedProblemType.description}`,
+      "",
+      "## 추가 요청사항",
+      additionalRequest?.trim() || "없음",
     );
   }
 

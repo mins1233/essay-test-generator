@@ -108,6 +108,7 @@ export async function generateAssessmentItems({
   teacherInput,
   suggestion,
   selectedElements,
+  selectedProblemType,
   additionalRequest,
 }) {
   const commandTerms = SCIENCE_COMMAND_TERMS.map(
@@ -121,16 +122,29 @@ export async function generateAssessmentItems({
     "제시문의 문장 끝은 '하였습니다', '했습니다' 같은 높임 표현 대신 '~하였다', '~했다'처럼 객관적인 평서문 어조로 작성하세요.",
     "문항마다 작성 조건을 2~4개 제시하고, 학생 답안에 포함되어야 할 핵심 과학 개념과 근거를 명확히 하세요.",
     "발문에는 과학 교과에 적절한 반응지시어를 다양하게 사용하세요.",
+    "논술형 평가 문항은 반드시 성취기준, 성취기준별 성취수준, 성취수준 분류표, 평가 요소, 문제 유형, 추가 요청사항을 종합하여 제작하세요.",
+    "문제 유형 예시는 형식 이해를 위한 참고 자료일 뿐입니다. 예시의 소재, 맥락, 표현, 문항 구조를 그대로 또는 비슷하게 모방하지 말고 입력된 성취기준과 평가 요소에 맞는 새로운 문항을 만드세요.",
     "반응지시어 목록:",
     commandTerms,
     formatTeacherInput(teacherInput),
     `AI가 제안한 평가 항목:\n${formatList(suggestion.assessmentItems)}`,
     `교사가 선택하거나 직접 입력한 평가 요소(${selectedElements.length}개):\n${selectedElements.map((element, index) => `${index + 1}. ${element.title} - ${element.focus}`).join("\n")}`,
+    formatProblemType(selectedProblemType),
     `교사의 추가 요청사항:\n${additionalRequest?.trim() || "없음"}`,
     `반드시 questions 배열의 길이를 ${selectedElements.length}개로 맞추세요.`,
   ].join("\n\n");
 
   return requestJson({ apiKey, model, prompt, schema: assessmentSchema });
+}
+
+function formatProblemType(problemType) {
+  if (!problemType) return "문제 유형:\n지정 없음";
+  return [
+    "문제 유형:",
+    `- 유형명: ${problemType.label}`,
+    `- 설명: ${problemType.description}`,
+    problemType.example ? `- 예시(참고용, 모방 금지):\n${problemType.example}` : "- 예시: 없음",
+  ].join("\n");
 }
 
 export async function generateRubrics({

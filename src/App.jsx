@@ -20,6 +20,7 @@ import {
   DEFAULT_MODEL,
   GEMINI_MODEL_OPTIONS,
   LEVELS,
+  PROBLEM_TYPES,
   STORAGE_KEY,
   createEmptyClassification,
 } from "./constants.js";
@@ -50,6 +51,8 @@ export default function App() {
   const [selectedElementIndexes, setSelectedElementIndexes] = useState([]);
   const [customAssessmentElements, setCustomAssessmentElements] = useState([]);
   const [additionalRequest, setAdditionalRequest] = useState("");
+  const [problemTypeId, setProblemTypeId] = useState(PROBLEM_TYPES[0].id);
+  const [customProblemType, setCustomProblemType] = useState("");
   const [rubricLevelCount, setRubricLevelCount] = useState(4);
   const [assessment, setAssessment] = useState(null);
   const [rubric, setRubric] = useState(null);
@@ -73,9 +76,21 @@ export default function App() {
     return [...suggestedElements, ...customElements];
   }, [customAssessmentElements, selectedElementIndexes, suggestion]);
 
+  const selectedProblemType = useMemo(() => {
+    const problemType = PROBLEM_TYPES.find((type) => type.id === problemTypeId) || PROBLEM_TYPES[0];
+    if (problemType.id !== "custom") return problemType;
+    return {
+      ...problemType,
+      label: customProblemType.trim() || problemType.label,
+      description: customProblemType.trim()
+        ? `교사가 직접 입력한 문제 유형: ${customProblemType.trim()}`
+        : problemType.description,
+    };
+  }, [customProblemType, problemTypeId]);
+
   const markdown = useMemo(
-    () => buildMarkdown({ teacherInput, suggestion, selectedElements, assessment, rubric }),
-    [teacherInput, suggestion, selectedElements, assessment, rubric],
+    () => buildMarkdown({ teacherInput, suggestion, selectedElements, selectedProblemType, additionalRequest, assessment, rubric }),
+    [teacherInput, suggestion, selectedElements, selectedProblemType, additionalRequest, assessment, rubric],
   );
 
   const isBusy = Boolean(loadingStep);
@@ -189,6 +204,8 @@ export default function App() {
       suggestion,
       selectedElements,
       customAssessmentElements,
+      problemTypeId,
+      customProblemType,
     });
     if (validation.length > 0) {
       setErrors(validation);
@@ -202,6 +219,7 @@ export default function App() {
         teacherInput,
         suggestion,
         selectedElements,
+        selectedProblemType,
         additionalRequest,
       });
       if (result.questions.length !== selectedElements.length) {
@@ -316,6 +334,18 @@ export default function App() {
 
   function updateAdditionalRequest(value) {
     setAdditionalRequest(value);
+    setAssessment(null);
+    setRubric(null);
+  }
+
+  function updateProblemType(value) {
+    setProblemTypeId(value);
+    setAssessment(null);
+    setRubric(null);
+  }
+
+  function updateCustomProblemType(value) {
+    setCustomProblemType(value);
     setAssessment(null);
     setRubric(null);
   }
@@ -552,15 +582,47 @@ export default function App() {
               </div>
 
               <div className="request-grid">
-                <label className="field">
-                  <span>추가 요청사항</span>
-                  <textarea
-                    value={additionalRequest}
-                    onChange={(event) => updateAdditionalRequest(event.target.value)}
-                    rows={4}
-                    placeholder="예: 학교 주변의 실제 생태 맥락을 제시문에 반영해 주세요."
-                  />
-                </label>
+                <div className="request-main">
+                  <label className="field">
+                    <span>추가 요청사항</span>
+                    <textarea
+                      value={additionalRequest}
+                      onChange={(event) => updateAdditionalRequest(event.target.value)}
+                      rows={4}
+                      placeholder="예: 학교 주변의 실제 생태 맥락을 제시문에 반영해 주세요."
+                    />
+                  </label>
+                  <div className="problem-type-panel">
+                    <label className="field">
+                      <span>문제 유형</span>
+                      <select
+                        value={problemTypeId}
+                        onChange={(event) => updateProblemType(event.target.value)}
+                      >
+                        {PROBLEM_TYPES.map((type) => (
+                          <option key={type.id} value={type.id}>
+                            {type.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    {problemTypeId === "custom" && (
+                      <label className="field compact">
+                        <span>직접 입력 문제 유형</span>
+                        <input
+                          value={customProblemType}
+                          onChange={(event) => updateCustomProblemType(event.target.value)}
+                          placeholder="예: 실험 설계형"
+                        />
+                      </label>
+                    )}
+                    <details className="type-details">
+                      <summary>{selectedProblemType.label}</summary>
+                      <p>{selectedProblemType.description}</p>
+                      {selectedProblemType.example && <pre>{selectedProblemType.example}</pre>}
+                    </details>
+                  </div>
+                </div>
                 <div className="request-side">
                   <label className="field">
                     <span>채점 단계 수</span>
@@ -888,10 +950,15 @@ function validateAssessmentRequest({
   suggestion,
   selectedElements,
   customAssessmentElements,
+  problemTypeId,
+  customProblemType,
 }) {
   const messages = validateTeacherInput({ apiKey, model, teacherInput });
   if (!suggestion) messages.push("먼저 평가 항목과 평가 요소를 생성해 주세요.");
   if (selectedElements.length === 0) messages.push("문항으로 만들 평가 요소를 1개 이상 선택해 주세요.");
+  if (problemTypeId === "custom" && !customProblemType.trim()) {
+    messages.push("기타 문제 유형을 선택한 경우 직접 입력 문제 유형을 입력해 주세요.");
+  }
   customAssessmentElements.forEach((element, index) => {
     const hasTitle = Boolean(element.title.trim());
     const hasFocus = Boolean(element.focus.trim());
