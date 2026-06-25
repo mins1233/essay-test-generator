@@ -2,9 +2,50 @@ export const LEVELS = ["A", "B", "C", "D", "E"];
 
 export const CLASSIFICATION_COLUMNS = ["지식 이해", "과정 기능", "가치 태도"];
 
-export const DEFAULT_MODEL = "gemini-2.5-flash";
+export const DEFAULT_PROVIDER = "gemini";
 
-export const STORAGE_KEY = "essay-assessment-gemini-api-key";
+export const DEFAULT_MODEL_BY_PROVIDER = {
+  gemini: "gemini-2.5-flash",
+  openai: "gpt-5.5",
+};
+
+export const DEFAULT_MODEL_TIER_BY_PROVIDER = {
+  gemini: "free",
+  openai: "flagship",
+};
+
+export const STORAGE_KEYS = {
+  gemini: "essay-assessment-gemini-api-key",
+  openai: "essay-assessment-openai-api-key",
+};
+
+export const AI_PROVIDERS = [
+  {
+    id: "gemini",
+    label: "Gemini",
+    apiKeyLabel: "Gemini API 키",
+    apiKeyPlaceholder: "AIza...",
+    keyHint: "Google AI Studio에서 발급한 사용자 본인의 API 키를 사용합니다.",
+  },
+  {
+    id: "openai",
+    label: "OpenAI",
+    apiKeyLabel: "OpenAI API 키",
+    apiKeyPlaceholder: "sk-...",
+    keyHint: "OpenAI API는 ChatGPT 무료/유료 플랜과 별개이며, API 결제수단 또는 크레딧이 있는 키가 필요합니다.",
+  },
+];
+
+export const MODEL_TIER_OPTIONS = {
+  gemini: [
+    { id: "free", label: "무료 버전" },
+    { id: "paid", label: "유료 버전" },
+  ],
+  openai: [
+    { id: "flagship", label: "고성능" },
+    { id: "economy", label: "저비용" },
+  ],
+};
 
 export const PROBLEM_TYPES = [
   {
@@ -91,42 +132,76 @@ export const PROBLEM_TYPES = [
   },
 ];
 
-export const GEMINI_MODEL_OPTIONS = [
+export const AI_MODEL_OPTIONS = [
   {
+    provider: "gemini",
     tier: "free",
     value: "gemini-2.5-flash",
     label: "Gemini 2.5 Flash",
     note: "무료 API 키 권장",
   },
   {
+    provider: "gemini",
     tier: "free",
     value: "gemini-3.5-flash",
     label: "Gemini 3.5 Flash",
     note: "무료 티어 사용 가능",
   },
   {
+    provider: "gemini",
     tier: "free",
     value: "gemini-3.1-flash-lite",
     label: "Gemini 3.1 Flash-Lite",
     note: "빠른 생성용",
   },
   {
+    provider: "gemini",
     tier: "paid",
     value: "gemini-2.5-pro",
     label: "Gemini 2.5 Pro (유료)",
     note: "복잡한 문항 설계용",
   },
   {
+    provider: "gemini",
     tier: "paid",
     value: "gemini-3.1-pro-preview",
     label: "Gemini 3.1 Pro Preview (유료)",
     note: "유료 API 키 필요",
   },
   {
+    provider: "gemini",
     tier: "paid",
     value: "gemini-3.5-flash",
     label: "Gemini 3.5 Flash (유료)",
     note: "유료 한도와 개인정보 처리 기준 적용",
+  },
+  {
+    provider: "openai",
+    tier: "flagship",
+    value: "gpt-5.5",
+    label: "GPT-5.5",
+    note: "최신 고성능 모델, 사용량 기반 과금",
+  },
+  {
+    provider: "openai",
+    tier: "flagship",
+    value: "gpt-5.4",
+    label: "GPT-5.4",
+    note: "고성능과 비용 균형",
+  },
+  {
+    provider: "openai",
+    tier: "economy",
+    value: "gpt-5.4-mini",
+    label: "GPT-5.4 Mini",
+    note: "낮은 비용과 빠른 응답",
+  },
+  {
+    provider: "openai",
+    tier: "economy",
+    value: "gpt-5.4-nano",
+    label: "GPT-5.4 Nano",
+    note: "가장 저렴한 OpenAI 선택지",
   },
 ];
 

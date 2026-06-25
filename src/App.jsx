@@ -3,7 +3,9 @@ import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
+  BookOpen,
   CheckSquare,
+  CheckCircle2,
   Clipboard,
   Download,
   FileText,
@@ -12,16 +14,21 @@ import {
   PenLine,
   PlusCircle,
   RefreshCw,
+  Search,
   Sparkles,
   Trash2,
 } from "lucide-react";
 import {
+  AI_MODEL_OPTIONS,
+  AI_PROVIDERS,
   CLASSIFICATION_COLUMNS,
-  DEFAULT_MODEL,
-  GEMINI_MODEL_OPTIONS,
+  DEFAULT_MODEL_BY_PROVIDER,
+  DEFAULT_MODEL_TIER_BY_PROVIDER,
+  DEFAULT_PROVIDER,
   LEVELS,
+  MODEL_TIER_OPTIONS,
   PROBLEM_TYPES,
-  STORAGE_KEY,
+  STORAGE_KEYS,
   createEmptyClassification,
 } from "./constants.js";
 import {
@@ -30,6 +37,8 @@ import {
   generateSuggestions,
 } from "./gemini.js";
 import { buildMarkdown, copyMarkdown, downloadMarkdown } from "./exportMarkdown.js";
+import { HIGH_SCHOOL_SCIENCE_STANDARDS } from "./highSchoolScience.js";
+import { MIDDLE_SCHOOL_SCIENCE_STANDARDS } from "./middleSchoolScience.js";
 
 const initialTeacherInput = {
   achievementStandard: "",
@@ -38,14 +47,31 @@ const initialTeacherInput = {
 };
 
 const PAGES = ["input", "suggestion", "assessment", "rubric"];
+const CURRICULUM_DATASETS = [
+  {
+    id: "middle",
+    label: "중학교",
+    title: "중학교 과학 성취기준별 성취수준",
+    standards: MIDDLE_SCHOOL_SCIENCE_STANDARDS,
+  },
+  {
+    id: "high",
+    label: "고등학교",
+    title: "고등학교 과학 성취기준별 성취수준",
+    standards: HIGH_SCHOOL_SCIENCE_STANDARDS,
+  },
+];
 
 export default function App() {
-  const savedApiKey = readSavedApiKey();
+  const savedApiKeys = readSavedApiKeys();
   const [page, setPage] = useState("input");
-  const [apiKey, setApiKey] = useState(savedApiKey);
-  const [saveApiKey, setSaveApiKey] = useState(Boolean(savedApiKey));
-  const [model, setModel] = useState(DEFAULT_MODEL);
-  const [modelTier, setModelTier] = useState("free");
+  const [provider, setProvider] = useState(DEFAULT_PROVIDER);
+  const [apiKeys, setApiKeys] = useState(savedApiKeys);
+  const [saveApiKeys, setSaveApiKeys] = useState(
+    Object.fromEntries(AI_PROVIDERS.map((item) => [item.id, Boolean(savedApiKeys[item.id])])),
+  );
+  const [model, setModel] = useState(DEFAULT_MODEL_BY_PROVIDER[DEFAULT_PROVIDER]);
+  const [modelTier, setModelTier] = useState(DEFAULT_MODEL_TIER_BY_PROVIDER[DEFAULT_PROVIDER]);
   const [teacherInput, setTeacherInput] = useState(initialTeacherInput);
   const [suggestion, setSuggestion] = useState(null);
   const [selectedElementIndexes, setSelectedElementIndexes] = useState([]);
@@ -60,6 +86,11 @@ export default function App() {
   const [errors, setErrors] = useState([]);
   const [rawResponse, setRawResponse] = useState("");
   const [notice, setNotice] = useState("");
+  const [curriculumOpen, setCurriculumOpen] = useState(false);
+  const [curriculumDatasetId, setCurriculumDatasetId] = useState(CURRICULUM_DATASETS[0].id);
+  const [curriculumSearch, setCurriculumSearch] = useState("");
+  const [selectedCurriculumCode, setSelectedCurriculumCode] = useState(MIDDLE_SCHOOL_SCIENCE_STANDARDS[0]?.code || "");
+  const [addedCurriculumCodes, setAddedCurriculumCodes] = useState([]);
 
   const selectedElements = useMemo(() => {
     if (!suggestion) return [];
@@ -93,11 +124,22 @@ export default function App() {
     [teacherInput, suggestion, selectedElements, selectedProblemType, additionalRequest, assessment, rubric],
   );
 
+  const selectedCurriculumStandard = useMemo(
+    () => {
+      const dataset = CURRICULUM_DATASETS.find((item) => item.id === curriculumDatasetId) || CURRICULUM_DATASETS[0];
+      return dataset.standards.find((standard) => standard.code === selectedCurriculumCode) || dataset.standards[0];
+    },
+    [curriculumDatasetId, selectedCurriculumCode],
+  );
+
   const isBusy = Boolean(loadingStep);
   const pageIndex = PAGES.indexOf(page);
   const hasSuggestion = Boolean(suggestion);
   const hasAssessment = Boolean(assessment);
   const hasRubric = Boolean(rubric);
+  const providerConfig = getProviderConfig(provider);
+  const apiKey = apiKeys[provider] || "";
+  const saveApiKey = Boolean(saveApiKeys[provider]);
 
   function goToPage(nextPage) {
     setErrors([]);
@@ -134,47 +176,90 @@ export default function App() {
     setTeacherInput((current) => ({ ...current, achievementStandard: value }));
   }
 
+  function chooseCurriculumDataset(datasetId) {
+    const dataset = CURRICULUM_DATASETS.find((item) => item.id === datasetId);
+    if (!dataset) return;
+    setCurriculumDatasetId(datasetId);
+    setCurriculumSearch("");
+    setSelectedCurriculumCode(dataset.standards[0]?.code || "");
+  }
+
+  function handleAddCurriculumStandard(standard) {
+    if (!standard) return;
+
+    setTeacherInput((current) => ({
+      ...current,
+      achievementStandard: appendTextareaValue(current.achievementStandard, standard.standard),
+      achievementLevels: Object.fromEntries(
+        LEVELS.map((level) => {
+          const levelText = standard.levels[level];
+          const nextValue = levelText ? `${standard.code} ${levelText}` : "";
+          return [
+            level,
+            nextValue
+              ? appendTextareaValue(current.achievementLevels[level], nextValue)
+              : current.achievementLevels[level],
+          ];
+        }),
+      ),
+    }));
+    setAddedCurriculumCodes((current) => [...current, standard.code]);
+    setErrors([]);
+    setRawResponse("");
+    setNotice(`${standard.code} 성취기준을 입력칸에 추가했습니다.`);
+  }
+
+  function chooseProvider(nextProvider) {
+    if (nextProvider === provider) return;
+    setProvider(nextProvider);
+    setModelTier(DEFAULT_MODEL_TIER_BY_PROVIDER[nextProvider]);
+    setModel(DEFAULT_MODEL_BY_PROVIDER[nextProvider]);
+    setErrors([]);
+    setRawResponse("");
+    setNotice("");
+  }
+
   function handleApiKeyChange(value) {
-    setApiKey(value);
+    setApiKeys((current) => ({ ...current, [provider]: value }));
     if (saveApiKey) {
-      localStorage.setItem(STORAGE_KEY, value);
+      localStorage.setItem(STORAGE_KEYS[provider], value);
     }
   }
 
   function handleSaveApiKeyChange(checked) {
-    setSaveApiKey(checked);
+    setSaveApiKeys((current) => ({ ...current, [provider]: checked }));
     if (checked && apiKey) {
-      localStorage.setItem(STORAGE_KEY, apiKey);
+      localStorage.setItem(STORAGE_KEYS[provider], apiKey);
     }
     if (!checked) {
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(STORAGE_KEYS[provider]);
     }
   }
 
   function clearSavedKey() {
-    localStorage.removeItem(STORAGE_KEY);
-    setApiKey("");
-    setSaveApiKey(false);
-    setNotice("저장된 API 키를 삭제했습니다.");
+    localStorage.removeItem(STORAGE_KEYS[provider]);
+    setApiKeys((current) => ({ ...current, [provider]: "" }));
+    setSaveApiKeys((current) => ({ ...current, [provider]: false }));
+    setNotice(`저장된 ${providerConfig.label} API 키를 삭제했습니다.`);
   }
 
   function chooseModelTier(tier) {
     setModelTier(tier);
-    const firstModel = GEMINI_MODEL_OPTIONS.find((option) => option.tier === tier);
+    const firstModel = AI_MODEL_OPTIONS.find((option) => option.provider === provider && option.tier === tier);
     if (firstModel) {
       setModel(firstModel.value);
     }
   }
 
   async function handleGenerateSuggestions() {
-    const validation = validateTeacherInput({ apiKey, model, teacherInput });
+    const validation = validateTeacherInput({ provider, apiKey, model, teacherInput });
     if (validation.length > 0) {
       setErrors(validation);
       return;
     }
 
     await runAiTask("suggestions", async () => {
-      const result = await generateSuggestions({ apiKey, model, teacherInput });
+      const result = await generateSuggestions({ provider, apiKey, model, teacherInput });
       assertRange(result.assessmentItems, 4, 5, "평가 항목");
       assertRange(result.assessmentElements, 3, 4, "평가 요소");
       setSuggestion(result);
@@ -199,6 +284,7 @@ export default function App() {
   async function handleGenerateAssessment() {
     const validation = validateAssessmentRequest({
       apiKey,
+      provider,
       model,
       teacherInput,
       suggestion,
@@ -215,6 +301,7 @@ export default function App() {
     await runAiTask("assessment", async () => {
       const result = await generateAssessmentItems({
         apiKey,
+        provider,
         model,
         teacherInput,
         suggestion,
@@ -242,7 +329,7 @@ export default function App() {
   }
 
   async function handleGenerateRubric() {
-    const validation = validateRubricRequest({ apiKey, model, assessment, selectedElements, rubricLevelCount });
+    const validation = validateRubricRequest({ provider, apiKey, model, assessment, selectedElements, rubricLevelCount });
     if (validation.length > 0) {
       setErrors(validation);
       return;
@@ -251,6 +338,7 @@ export default function App() {
     await runAiTask("rubric", async () => {
       const result = await generateRubrics({
         apiKey,
+        provider,
         model,
         teacherInput,
         assessment,
@@ -281,10 +369,10 @@ export default function App() {
       await task();
     } catch (error) {
       setErrors([error.message || "알 수 없는 오류가 발생했습니다."]);
-      if (error.name === "GeminiParseError") {
+      if (error.name === "AiParseError") {
         setRawResponse(typeof error.raw === "string" ? error.raw : JSON.stringify(error.raw, null, 2));
       }
-      if (error.name === "GeminiRequestError" && error.details) {
+      if (error.name === "AiRequestError" && error.details) {
         setRawResponse(JSON.stringify(error.details, null, 2));
       }
     } finally {
@@ -392,17 +480,20 @@ export default function App() {
         <section className="page-layout">
           <div className="page-card">
             <PanelTitle icon={<KeyRound size={18} />} title="AI 연결" />
+            <ProviderSelector provider={provider} onProviderChange={chooseProvider} />
             <label className="field">
-              <span>Gemini API 키</span>
+              <span>{providerConfig.apiKeyLabel}</span>
               <input
                 type="password"
                 value={apiKey}
                 onChange={(event) => handleApiKeyChange(event.target.value)}
-                placeholder="AIza..."
+                placeholder={providerConfig.apiKeyPlaceholder}
                 autoComplete="off"
               />
+              <small className="field-help">{providerConfig.keyHint}</small>
             </label>
             <ModelSelector
+              provider={provider}
               model={model}
               modelTier={modelTier}
               onTierChange={chooseModelTier}
@@ -424,6 +515,19 @@ export default function App() {
 
           <div className="page-card">
             <PanelTitle icon={<PenLine size={18} />} title="교사 입력" />
+            <CurriculumLoader
+              addedCodes={addedCurriculumCodes}
+              isOpen={curriculumOpen}
+              onAdd={handleAddCurriculumStandard}
+              onDatasetChange={chooseCurriculumDataset}
+              onOpenChange={setCurriculumOpen}
+              onSearchChange={setCurriculumSearch}
+              onSelect={setSelectedCurriculumCode}
+              selectedDatasetId={curriculumDatasetId}
+              search={curriculumSearch}
+              selectedStandard={selectedCurriculumStandard}
+              datasets={CURRICULUM_DATASETS}
+            />
             <label className="field">
               <span>성취기준</span>
               <textarea
@@ -795,27 +899,46 @@ export default function App() {
   );
 }
 
-function ModelSelector({ model, modelTier, onTierChange, onModelChange }) {
-  const filteredModels = GEMINI_MODEL_OPTIONS.filter((option) => option.tier === modelTier);
+function ProviderSelector({ provider, onProviderChange }) {
+  return (
+    <div className="model-selector">
+      <span className="field-label">AI 제공자</span>
+      <div className="segmented-control" role="group" aria-label="AI 제공자 선택">
+        {AI_PROVIDERS.map((option) => (
+          <button
+            className={provider === option.id ? "active" : ""}
+            key={option.id}
+            type="button"
+            onClick={() => onProviderChange(option.id)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ModelSelector({ provider, model, modelTier, onTierChange, onModelChange }) {
+  const filteredModels = AI_MODEL_OPTIONS.filter(
+    (option) => option.provider === provider && option.tier === modelTier,
+  );
+  const tierOptions = MODEL_TIER_OPTIONS[provider] || [];
 
   return (
     <div className="model-selector">
-      <span className="field-label">API 키 유형</span>
-      <div className="segmented-control" role="group" aria-label="API 키 유형 선택">
-        <button
-          className={modelTier === "free" ? "active" : ""}
-          type="button"
-          onClick={() => onTierChange("free")}
-        >
-          무료 버전
-        </button>
-        <button
-          className={modelTier === "paid" ? "active" : ""}
-          type="button"
-          onClick={() => onTierChange("paid")}
-        >
-          유료 버전
-        </button>
+      <span className="field-label">모델 구분</span>
+      <div className="segmented-control" role="group" aria-label="모델 구분 선택">
+        {tierOptions.map((option) => (
+          <button
+            className={modelTier === option.id ? "active" : ""}
+            key={option.id}
+            type="button"
+            onClick={() => onTierChange(option.id)}
+          >
+            {option.label}
+          </button>
+        ))}
       </div>
 
       <div className="model-options">
@@ -833,6 +956,137 @@ function ModelSelector({ model, modelTier, onTierChange, onModelChange }) {
         ))}
       </div>
     </div>
+  );
+}
+
+function CurriculumLoader({
+  addedCodes,
+  datasets,
+  isOpen,
+  onAdd,
+  onDatasetChange,
+  onOpenChange,
+  onSearchChange,
+  onSelect,
+  search,
+  selectedDatasetId,
+  selectedStandard,
+}) {
+  const selectedDataset = datasets.find((dataset) => dataset.id === selectedDatasetId) || datasets[0];
+  const standards = selectedDataset.standards;
+  const normalizedSearch = search.trim().toLowerCase();
+  const filteredStandards = standards.filter((standard) => {
+    if (!normalizedSearch) return true;
+    return (
+      standard.code.toLowerCase().includes(normalizedSearch) ||
+      standard.standard.toLowerCase().includes(normalizedSearch)
+    );
+  });
+  const addedCodeSet = new Set(addedCodes);
+
+  return (
+    <section className="curriculum-loader" aria-label="교육과정 자료 불러오기">
+      <div className="curriculum-loader-head">
+        <div>
+          <span className="field-label">교육과정 자료 불러오기</span>
+          <strong>{selectedDataset.title}</strong>
+        </div>
+        <div className="curriculum-school-group" role="group" aria-label="학교급 자료 선택">
+          {datasets.map((dataset) => (
+            <button
+              className={
+                isOpen && selectedDatasetId === dataset.id
+                  ? "button secondary curriculum-school active"
+                  : "button ghost curriculum-school"
+              }
+              key={dataset.id}
+              type="button"
+              onClick={() => {
+                if (isOpen && selectedDatasetId === dataset.id) {
+                  onOpenChange(false);
+                  return;
+                }
+                onDatasetChange(dataset.id);
+                onOpenChange(true);
+              }}
+            >
+              <BookOpen size={17} />
+              {dataset.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {isOpen && (
+        <div className="curriculum-browser">
+          <label className="field compact curriculum-search">
+            <span>
+              <Search size={15} />
+              성취기준 검색
+            </span>
+            <input
+              value={search}
+              onChange={(event) => onSearchChange(event.target.value)}
+              placeholder="[9과01-01]"
+            />
+          </label>
+
+          <div className="curriculum-content">
+            <div className="curriculum-code-list" aria-label="성취기준 번호 목록">
+              {filteredStandards.map((standard) => {
+                const isSelected = selectedStandard?.code === standard.code;
+                const isAdded = addedCodeSet.has(standard.code);
+                return (
+                  <button
+                    className={isSelected ? "curriculum-code selected" : "curriculum-code"}
+                    key={standard.code}
+                    type="button"
+                    onClick={() => onSelect(standard.code)}
+                  >
+                    <span>{standard.code}</span>
+                    {isAdded && <small>이미 추가됨</small>}
+                  </button>
+                );
+              })}
+              {filteredStandards.length === 0 && (
+                <div className="curriculum-empty">검색 결과가 없습니다.</div>
+              )}
+            </div>
+
+            {selectedStandard && (
+              <div className="curriculum-preview">
+                <div className="curriculum-preview-head">
+                  <strong>{selectedStandard.code}</strong>
+                  {addedCodeSet.has(selectedStandard.code) && (
+                    <span>
+                      <CheckCircle2 size={15} />
+                      이미 추가됨
+                    </span>
+                  )}
+                </div>
+                <p>{selectedStandard.standard}</p>
+                <div className="curriculum-levels">
+                  {LEVELS.map((level) => (
+                    <div className="curriculum-level" key={level}>
+                      <strong>{level}</strong>
+                      <span>{selectedStandard.levels[level] || "원문에 없음"}</span>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  className="button primary curriculum-add"
+                  type="button"
+                  onClick={() => onAdd(selectedStandard)}
+                >
+                  <PlusCircle size={17} />
+                  성취기준 추가
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -930,21 +1184,22 @@ function Feedback({ errors, notice, rawResponse }) {
   );
 }
 
-function validateTeacherInput({ apiKey, model, teacherInput }) {
+function validateTeacherInput({ provider, apiKey, model, teacherInput }) {
   const messages = [];
-  if (!apiKey.trim()) messages.push("Gemini API 키를 입력해 주세요.");
-  if (!model.trim()) messages.push("Gemini 모델을 선택해 주세요.");
+  const providerLabel = getProviderConfig(provider).label;
+  if (!apiKey.trim()) messages.push(`${providerLabel} API 키를 입력해 주세요.`);
+  if (!model.trim()) messages.push(`${providerLabel} 모델을 선택해 주세요.`);
   if (!teacherInput.achievementStandard.trim()) messages.push("성취기준을 입력해 주세요.");
-  LEVELS.forEach((level) => {
-    if (!teacherInput.achievementLevels[level].trim()) {
-      messages.push(`${level} 성취수준을 입력해 주세요.`);
-    }
-  });
+  const filledLevelCount = LEVELS.filter((level) => teacherInput.achievementLevels[level].trim()).length;
+  if (filledLevelCount < 3) {
+    messages.push("성취수준을 3개 이상 입력해 주세요.");
+  }
   return messages;
 }
 
 function validateAssessmentRequest({
   apiKey,
+  provider,
   model,
   teacherInput,
   suggestion,
@@ -953,7 +1208,7 @@ function validateAssessmentRequest({
   problemTypeId,
   customProblemType,
 }) {
-  const messages = validateTeacherInput({ apiKey, model, teacherInput });
+  const messages = validateTeacherInput({ provider, apiKey, model, teacherInput });
   if (!suggestion) messages.push("먼저 평가 항목과 평가 요소를 생성해 주세요.");
   if (selectedElements.length === 0) messages.push("문항으로 만들 평가 요소를 1개 이상 선택해 주세요.");
   if (problemTypeId === "custom" && !customProblemType.trim()) {
@@ -969,10 +1224,11 @@ function validateAssessmentRequest({
   return messages;
 }
 
-function validateRubricRequest({ apiKey, model, assessment, selectedElements, rubricLevelCount }) {
+function validateRubricRequest({ provider, apiKey, model, assessment, selectedElements, rubricLevelCount }) {
   const messages = [];
-  if (!apiKey.trim()) messages.push("Gemini API 키를 입력해 주세요.");
-  if (!model.trim()) messages.push("Gemini 모델을 선택해 주세요.");
+  const providerLabel = getProviderConfig(provider).label;
+  if (!apiKey.trim()) messages.push(`${providerLabel} API 키를 입력해 주세요.`);
+  if (!model.trim()) messages.push(`${providerLabel} 모델을 선택해 주세요.`);
   if (!assessment) messages.push("먼저 제시문과 문항을 생성해 주세요.");
   if (selectedElements.length === 0) messages.push("선택된 평가 요소가 없습니다.");
   if (![3, 4, 5].includes(rubricLevelCount)) messages.push("채점 단계 수는 3, 4, 5단계 중에서 선택해 주세요.");
@@ -985,12 +1241,20 @@ function assertRange(items, min, max, label) {
   }
 }
 
-function readSavedApiKey() {
-  try {
-    return localStorage.getItem(STORAGE_KEY) || "";
-  } catch {
-    return "";
-  }
+function readSavedApiKeys() {
+  return Object.fromEntries(
+    AI_PROVIDERS.map((provider) => {
+      try {
+        return [provider.id, localStorage.getItem(STORAGE_KEYS[provider.id]) || ""];
+      } catch {
+        return [provider.id, ""];
+      }
+    }),
+  );
+}
+
+function getProviderConfig(provider) {
+  return AI_PROVIDERS.find((item) => item.id === provider) || AI_PROVIDERS[0];
 }
 
 function createElementId() {
@@ -998,4 +1262,9 @@ function createElementId() {
     return crypto.randomUUID();
   }
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function appendTextareaValue(currentValue, nextValue) {
+  const current = currentValue.trimEnd();
+  return current ? `${current}\n${nextValue}` : nextValue;
 }
